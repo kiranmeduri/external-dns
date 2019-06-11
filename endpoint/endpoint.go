@@ -134,6 +134,9 @@ type Endpoint struct {
 	// ProviderSpecific stores provider specific config
 	// +optional
 	ProviderSpecific ProviderSpecific `json:"providerSpecific,omitempty"`
+	// TargetLabels for target
+	// +optional
+	TargetLabels TargetLabels `json:"targetLabels,omitempty"`
 }
 
 // NewEndpoint initialization method to be used to create an endpoint
@@ -218,4 +221,10 @@ type DNSEndpointList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []DNSEndpoint `json:"items"`
+}
+
+type TargetLabels map[string]Labels
+
+func NewTargetLabels() TargetLabels {
+	return map[string]Labels{}
 }

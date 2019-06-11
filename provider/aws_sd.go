@@ -171,6 +171,7 @@ func (p *AWSSDProvider) instancesToEndpoint(ns *sd.NamespaceSummary, srv *sd.Ser
 	}
 
 	for _, inst := range instances {
+
 		// CNAME
 		if inst.Attributes[sdInstanceAttrCname] != nil && aws.StringValue(srv.DnsConfig.DnsRecords[0].Type) == sd.RecordTypeCname {
 			newEndpoint.RecordType = endpoint.RecordTypeCNAME
@@ -487,6 +488,13 @@ func (p *AWSSDProvider) RegisterInstance(service *sd.Service, ep *endpoint.Endpo
 		log.Infof("Registering a new instance \"%s\" for service \"%s\" (%s)", target, *service.Name, *service.Id)
 
 		attr := make(map[string]*string)
+
+		targetLabels, ok := ep.TargetLabels[target]
+		if ok {
+			for k, v := range targetLabels {
+				attr[k] = aws.String(v)
+			}
+		}
 
 		if ep.RecordType == endpoint.RecordTypeCNAME {
 			if p.isAWSLoadBalancer(target) {

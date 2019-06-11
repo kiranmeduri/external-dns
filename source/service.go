@@ -230,28 +230,35 @@ func (sc *serviceSource) extractHeadlessEndpoints(svc *v1.Service, hostname stri
 	}
 
 	targetsByHeadlessDomain := make(map[string][]string)
-	for _, v := range pods {
+	targetLabels := make(map[string]endpoint.Labels)
+	for _, pod := range pods {
 		headlessDomains := []string{hostname}
+		epLabels := endpoint.NewLabels()
+		for k, v := range pod.Labels {
+			epLabels[k] = v
+		}
 
-		if v.Spec.Hostname != "" {
-			headlessDomains = append(headlessDomains, fmt.Sprintf("%s.%s", v.Spec.Hostname, hostname))
+		if pod.Spec.Hostname != "" {
+			headlessDomains = append(headlessDomains, fmt.Sprintf("%s.%s", pod.Spec.Hostname, hostname))
 		}
 		for _, headlessDomain := range headlessDomains {
 			if sc.publishHostIP == true {
-				log.Debugf("Generating matching endpoint %s with HostIP %s", headlessDomain, v.Status.HostIP)
+				log.Debugf("Generating matching endpoint %s with HostIP %s", headlessDomain, pod.Status.HostIP)
 				// To reduce traffice on the DNS API only add record for running Pods. Good Idea?
-				if v.Status.Phase == v1.PodRunning {
-					targetsByHeadlessDomain[headlessDomain] = append(targetsByHeadlessDomain[headlessDomain], v.Status.HostIP)
+				if pod.Status.Phase == v1.PodRunning {
+					targetsByHeadlessDomain[headlessDomain] = append(targetsByHeadlessDomain[headlessDomain], pod.Status.HostIP)
+					targetLabels[pod.Status.HostIP] = epLabels
 				} else {
-					log.Debugf("Pod %s is not in running phase", v.Spec.Hostname)
+					log.Debugf("Pod %s is not in running phase", pod.Spec.Hostname)
 				}
 			} else {
-				log.Debugf("Generating matching endpoint %s with PodIP %s", headlessDomain, v.Status.PodIP)
+				log.Debugf("Generating matching endpoint %s with PodIP %s", headlessDomain, pod.Status.PodIP)
 				// To reduce traffice on the DNS API only add record for running Pods. Good Idea?
-				if v.Status.Phase == v1.PodRunning {
-					targetsByHeadlessDomain[headlessDomain] = append(targetsByHeadlessDomain[headlessDomain], v.Status.PodIP)
+				if pod.Status.Phase == v1.PodRunning {
+					targetsByHeadlessDomain[headlessDomain] = append(targetsByHeadlessDomain[headlessDomain], pod.Status.PodIP)
+					targetLabels[pod.Status.PodIP] = epLabels
 				} else {
-					log.Debugf("Pod %s is not in running phase", v.Spec.Hostname)
+					log.Debugf("Pod %s is not in running phase", pod.Spec.Hostname)
 				}
 			}
 		}
@@ -265,11 +272,14 @@ func (sc *serviceSource) extractHeadlessEndpoints(svc *v1.Service, hostname stri
 	sort.Strings(headlessDomains)
 	for _, headlessDomain := range headlessDomains {
 		targets := targetsByHeadlessDomain[headlessDomain]
+		var ep *endpoint.Endpoint
 		if ttl.IsConfigured() {
-			endpoints = append(endpoints, endpoint.NewEndpointWithTTL(headlessDomain, endpoint.RecordTypeA, ttl, targets...))
+			ep = endpoint.NewEndpointWithTTL(headlessDomain, endpoint.RecordTypeA, ttl, targets...)
 		} else {
-			endpoints = append(endpoints, endpoint.NewEndpoint(headlessDomain, endpoint.RecordTypeA, targets...))
+			ep = endpoint.NewEndpoint(headlessDomain, endpoint.RecordTypeA, targets...)
 		}
+		ep.TargetLabels = targetLabels
+		endpoints = append(endpoints, ep)
 	}
 
 	return endpoints
